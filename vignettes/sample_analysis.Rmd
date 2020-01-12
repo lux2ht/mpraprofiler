@@ -1,0 +1,378 @@
+---
+title: "Massively Parallel Reporter Assay Analysis"
+author: "Xiaoming Lu"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 6,
+  fig.height = 3,
+  fig.align = "center"
+)
+```
+
+## Package dependency
+For this analysis, you need the following packages.
+```{r, message=FALSE}
+# Install these packages if you don't have
+
+# install.packages("devtools")
+# install.packages("getPass")
+# devtools::install_git("https://tfwebdev.research.cchmc.org/gitlab/lux2ht/mpraprofiler.git", ,credentials = git2r::cred_user_pass("lux2ht", getPass::getPass()))
+
+library(mpraprofiler)
+library(readxl)
+library(tidyverse)
+library("DESeq2")
+```
+
+## Data Preparation for DESeq2
+All the sample data are in the data folder, which is the TE7 dataset.
+```{r, message=FALSE, warning=FALSE}
+# Read all the data
+# Here use data from package.You can replace with your own data.
+ext_data <- system.file("extdata", package = "mpraprofiler")
+file_list <- list.files(ext_data, pattern = "*.xlsx")
+file_loc <- paste(ext_data, file_list, sep = "/")
+df_list <- lapply(file_loc, read_xlsx)
+
+# Give each dataset list a name
+mpra_name <- str_split(file_list, "_", simplify = TRUE)[2:11, 1]
+names(df_list) <- c("EoE_ctrl", mpra_name)
+
+# Combine all the dataset in the list to a data frame
+df <- bind_rows(df_list, .id = "id")
+
+# Select the useful ones for later analysis
+df_use <- df %>% select(1, 3, 8)
+names(df_use) <- c("sample", "reference_id", "counts")
+
+# Change the data into a count matrix
+count_table <- spread(df_use, sample, counts)
+cts <- count_table
+
+# Build DESeq2 required matrix
+cts <- cts[, 2:ncol(cts)]
+row.names(cts) <- count_table$reference_id
+cts <- as.matrix(cts)
+
+# This is how the required format for DESeq2 looks like
+head(cts)
+```
+
+## DESeq2 analysis
+** You may refer to `DESeq2` package for more details **
+
+Create the design matrix for DESeq2.
+```{r, message=FALSE}
+coldata <- data.frame("condition" = c("eoe_control", "te7", "te7", "te7", "te7", "te7", "te7_il13", "te7_il13", "te7_il13", "te7_il13", "te7_il13"), row.names = colnames(cts))
+
+# check the design matrix has the same order as the count matrix.
+all(rownames(coldata) == colnames(cts))
+
+coldata
+```
+
+Perform DESeq2 analysis.
+```{r, message = FALSE}
+# library("DESeq2")
+dds <- DESeqDataSetFromMatrix(
+  countData = cts,
+  colData = coldata,
+  design = ~condition
+)
+
+dds <- DESeq(dds)
+
+# te7 vs ctrl comparison
+te7_ctrl <- results(dds, contrast = c("condition", "te7", "eoe_control"))
+# te7 with il13 stimulation vs ctrl comparison
+te7_il13 <- results(dds, contrast = c("condition", "te7_il13", "eoe_control"))
+# te7 with il13 stimulation vs te7 comparison
+te7_il13_te7 <- results(dds, contrast = c("condition", "te7_il13", "te7"))
+```
+
+Export some data for others to work with.
+```{r, eval = FALSE}
+# summary output
+sink("te7_vs_ctrl_summary.txt")
+summary(results(dds, contrast = c("condition", "te7", "eoe_control"), alpha = 0.05, lfcThreshold = log2(1.5)))
+sink()
+
+sink("te7_il13_vs_ctrl_summary.txt")
+summary(results(dds, contrast = c("condition", "te7_il13", "eoe_control"), alpha = 0.05, lfcThreshold = log2(1.5)))
+sink()
+
+sink("te7_il13_vs_te7_summary.txt")
+summary(results(dds, contrast = c("condition", "te7_il13", "te7"), alpha = 0.05, lfcThreshold = log2(1.15)))
+sink()
+
+# output the deseq2 result
+write.csv(as.data.frame(te7_ctrl), "te7_vs_ctrl_deseq2.csv")
+write.csv(as.data.frame(te7_il13), "te7_il13_vs_ctrl_deseq2.csv")
+write.csv(as.data.frame(te7_il13_te7), "te7_il13_vs_te7_deseq2.csv")
+```
+
+## Plot the fold change for enhancer
+```{r, message = FALSE, warning=FALSE}
+fold_enhancer_plot(te7_ctrl, main = "TE7 vs Ctrl")
+# similar for others
+# fold_enhancer_plot(te7_il13, main = "TE7 with IL13 stimulation vs Ctrl")
+# fold_enhancer_plot(te7_il13_te7, main = "TE7 with IL13 stimulation vs TE7",  xmin = 2^-log2(1.7), xmax = 2, bw = 0.001, breaks = c(1,2), ladjust = 0, radjust = 0, foldchange = 0.15)
+```
+
+## Define enhancers
+### Correpsonding positive set and negative set can be used for **RELI** and **HOMER** analysis through using pos set as foreground and neg set as background.
+
+### te7 enhancer: More than 50% change with padj <= 0.05
+```{r, message=FALSE}
+te7_ctrl_res <- as.data.frame(te7_ctrl)
+te7_ctrl_res$reference_id <- rownames(te7_ctrl_res)
+te7_ctrl_enhancer <- te7_ctrl_res %>% filter(log2FoldChange >= log2(1.5) & padj <= 0.05)
+te7_ctrl_snp <- unique(str_split(te7_ctrl_enhancer$reference_id, "_", simplify = TRUE)[, 1])
+# write_lines(te7_ctrl_snp, "te7_ctrl_enhancer.txt", na = "NA", append = FALSE)
+```
+
+### te7 enhancer neg set: within 10% change and padj > 0.05
+```{r, message=FALSE}
+te7_ctrl_neg <- te7_ctrl_res %>% filter((log2FoldChange <= log2(1.1) & log2FoldChange >= -log2(1.1)) & padj > 0.05)
+te7_ctrl_neg_snp <- unique(str_split(te7_ctrl_neg$reference_id, "_", simplify = TRUE)[, 1])
+# write_lines(te7_ctrl_neg_snp, "te7_ctrl_neg.txt", na = "NA", append = FALSE)
+```
+
+### te7 with IL13 enhancer: More than 50% change with padj <= 0.05
+```{r, message=FALSE}
+te7_il13_res <- as.data.frame(te7_il13)
+te7_il13_res$reference_id <- rownames(te7_il13_res)
+te7_il13_enhancer <- te7_il13_res %>% filter(log2FoldChange >= log2(1.5) & padj <= 0.05)
+te7_il13_snp <- unique(str_split(te7_il13_enhancer$reference_id, "_", simplify = TRUE)[, 1])
+# write_lines(te7_il13_snp, "te7_il13_enhancer.txt", na = "NA", append = FALSE)
+```
+
+### te7 with IL13 enhancer neg set: within 10% change and padj > 0.05
+```{r, message=FALSE}
+te7_il13_neg <- te7_il13_res %>% filter((log2FoldChange <= log2(1.1) & log2FoldChange >= -log2(1.1)) & padj > 0.05)
+te7_il13_neg_snp <- unique(str_split(te7_il13_neg$reference_id, "_", simplify = TRUE)[, 1])
+# write_lines(te7_il13_neg_snp, "te7_il13_neg.txt", na = "NA", append = FALSE)
+```
+
+### te7 with IL13 enhancer vs te7 enhancer
+Extract rownames from DESeq2 comparison
+```{r, message=FALSE}
+te7_il13_te7_res <- as.data.frame(te7_il13_te7)
+te7_il13_te7_res$reference_id <- rownames(te7_il13_te7_res)
+```
+
+1. It has to be enhancers in either comparision: te7 vs ctrl and te7 with IL13 vs ctrl
+```{r}
+either_enhancer <- full_join(te7_ctrl_enhancer, te7_il13_enhancer, by = "reference_id")
+```
+
+2. IL13 enhancer dependent enhancer need to have p<=0.05 and more than 15% change
+```{r}
+il13_enhancer <- te7_il13_te7_res %>% filter((reference_id %in% either_enhancer$reference_id) & padj <= 0.05 & log2FoldChange >= log2(1.15))
+
+il13_enhancer_snp <- unique(str_split(il13_enhancer$reference_id, "_", simplify = TRUE)[, 1])
+# write_lines(il13_enhancer_snp, "il13_enhancer.txt", na = "NA", append = FALSE)
+```
+
+### te7 with IL13 enhancer vs te7 enhancer neg set: within 5% change and padj > 0.05
+```{r, message=FALSE}
+il13_enhancer_neg <- te7_il13_te7_res %>% filter((log2FoldChange <= log2(1.05) & log2FoldChange >= -log2(1.05)) & padj > 0.05)
+il13_enhancer_neg_snp <- unique(str_split(il13_enhancer_neg$reference_id, "_", simplify = TRUE)[, 1])
+# write_lines(il13_enhancer_neg_snp, "il13_enhancer_neg.txt", na = "NA", append = FALSE)
+```
+
+**We now have all the enhancers**
+
+## Other Enhancer Analysis
+* use ez_pipeline for RELI and HOMER analysis.
+* GESA analysls:
+  + Enrichr: https://amp.pharm.mssm.edu/Enrichr/
+  + String: https://string-db.org/
+  + `clusterProfiler`: https://yulab-smu.github.io/clusterProfiler-book/index.html
+    + R package: universal enrichment tool for functional and comparative study
+
+
+## Dataset correlation
+```{r}
+normalized_cts <- counts(dds, normalized = TRUE) # use the normalized counts for correlation
+cor_cts <- cor(normalized_cts)
+cor_cts
+```
+
+## Allelic Analysis
+### Prepare the data: add 0.5 to avoid infinite problem
+```{r}
+cts <- cts + 0.5 # just use the dataset prepared for DESeq2
+cts_nr_r_ratio <- nr_r_ratio(cts) # this step calculate the non-ref vs ref ratio for all the variants and sample
+head(cts_nr_r_ratio)
+```
+
+## te7_vs_ctrl 
+### normalization over the control and do log2 transformation
+```{r}
+# you need to indicate the exp data, ctrl data and the annotation data
+te7_allelic_all <- allelic_compare(cts_nr_r_ratio[, 2:6], cts_nr_r_ratio[, 1], cts_nr_r_ratio[, c("snp", "compare_nrvsr")]) # exp, ctrl, annotation
+```
+
+### get the max fold change for each variant
+```{r}
+te7_ctrl_max_fold <- max_fold(te7_ctrl)
+```
+
+### get the p-value for the significant enhancer
+```{r}
+te7_allelic_p <- allelic_compare_p(te7_allelic_all, te7_ctrl_snp) # the allelic log2 normalization data (allelic_compare) and the list of enhancer variant.
+
+# write.csv(as.data.frame(te7_allelic_p), "te7_vs_ctrl_enhancer_allelic.csv")
+```
+
+### get the significant allielic variant : Over than 20% change in either direction and padj < =0.05
+```{r}
+te7_allelic <- te7_allelic_p %>% filter(pFDR <= 0.05 & (log2_aver >= log2(1.20) | log2_aver <= -log2(1.20)))
+# write.csv(as.data.frame(te7_allelic), "te7_vs_ctrl_allelic.csv")
+# save the detail data
+
+te7_allelic_snp <- te7_allelic %>%
+  pull(snp) %>%
+  unique()
+# write_lines(te7_allelic_snp, "te7_vs_ctrl_allelic_snp.txt", na = "NA", append = FALSE)
+# save the variant list
+```
+
+### significant allielic variant neg set: within 20% change and padj > 0.05
+```{r}
+te7_allelic_snp_neg <- te7_allelic_p %>%
+  filter(pFDR > 0.05 & (log2_aver < log2(1.05) & log2_aver > -log2(1.05))) %>%
+  pull(snp) %>%
+  unique()
+# write_lines(te7_allelic_snp_neg, "te7_vs_ctrl_allelic_neg.txt", na = "NA", append = FALSE)
+```
+
+### Plot
+```{r, message=FALSE, fig.fullwidth=TRUE}
+te7_ctrl_plot <- inner_join(te7_allelic_all, te7_ctrl_max_fold, by = "snp") %>% left_join(te7_allelic_p[, c("snp", "p_value", "pFDR")], by = "snp") # combine the nr_r_ratio, max_fold and p_value for each variant
+
+te7_ctrl_plot$pos <- ifelse(te7_ctrl_plot$snp %in% te7_allelic_snp & (te7_ctrl_plot$log2_aver >= log2(1.20) | te7_ctrl_plot$log2_aver <= -log2(1.20)), 1, 0) # label the significant variant
+te7_ctrl_plot %>% replace_na(list(pos = 0)) -> te7_ctrl_plot # make all the other variants 0
+
+allelic_enhancer_dot_plot(te7_ctrl_plot, log2 = "log2_aver", max_fold = "max_fold", label = "pos") # with indicator line
+allelic_enhancer_dot_plot(te7_ctrl_plot, log2 = "log2_aver", max_fold = "max_fold", label = "pos", type = 0) # without indicator line
+```
+
+
+## te7_il13_vs_ctrl
+### normalization over the control and do log2 transformation
+```{r}
+te7_il13_allelic_all <- allelic_compare(cts_nr_r_ratio[,7:11],cts_nr_r_ratio[,1],(cts_nr_r_ratio[,c("snp","compare_nrvsr")]))
+```
+
+### get the max fold change for each variant
+```{r}
+te7_il13_max_fold <- max_fold(te7_il13)
+```
+
+### get the p-value for the significant enhancer
+```{r}
+te7_il13_allelic_p <- allelic_compare_p(te7_il13_allelic_all,te7_il13_snp)
+```
+
+
+### get the significant allielic variant : Over than 20% change in either direction and padj < =0.05
+```{r}
+te7_il13_allelic <- te7_il13_allelic_p %>% filter(pFDR <= 0.05 & (log2_aver >= log2(1.20) | log2_aver <= -log2(1.20)))
+
+# write.csv(as.data.frame(te7_il13_allelic), "te7_il13_vs_ctrl_allelic.csv")
+
+te7_il13_allelic_snp <- te7_il13_allelic %>% pull(snp) %>% unique()
+# write_lines(te7_il13_allelic_snp, "te7_il13_vs_ctrl_allelic_snp.txt", na = "NA", append = FALSE)
+```
+
+
+### significant allielic variant neg set: within 20% change and padj > 0.05
+```{r}
+te7_il13_allelic_snp_neg <- te7_il13_allelic_p %>% filter(pFDR > 0.05 & (log2_aver < log2(1.05) & log2_aver > -log2(1.05))) %>% pull(snp) %>% unique()
+# write_lines(te7_il13_allelic_snp_neg, "te7_il13_vs_ctrl_allelic_neg.txt", na = "NA", append = FALSE)
+```
+
+### Plot
+```{r}
+te7_il13_plot <- inner_join(te7_il13_allelic_all,te7_il13_max_fold, by = "snp") %>% left_join(te7_il13_allelic_p[,c("snp","p_value", "pFDR")], by = "snp")
+
+te7_il13_plot$pos <- ifelse(te7_il13_plot$pFDR <=0.05, 1,0) 
+te7_il13_plot %>% replace_na(list(pos=0)) ->te7_il13_plot
+
+allelic_enhancer_dot_plot(te7_il13_plot, log2 = "log2_aver", max_fold = "max_fold", label = "pos")
+```
+
+
+## te7_il13_vs_te7
+### normalization over the control and do log2 transformation
+```{r}
+te7_il13_te7_allelic_all <- allelic_compare(cts_nr_r_ratio[,7:11],cts_nr_r_ratio[,2:6],cts_nr_r_ratio[,c("snp","compare_nrvsr")])
+```
+
+### get the max fold change for each variant
+```{r}
+te7_il13_te7_max_fold <- max_fold(te7_il13_te7)
+
+```
+
+### get the significant allielic variant : only padj < =0.05 and no fold change
+```{r}
+te7_il13_te7_allelic_p <- allelic_compare_p(te7_il13_te7_allelic_all,il13_enhancer_snp)
+
+te7_il13_te7_allelic <- te7_il13_te7_allelic_p %>% filter(pFDR <= 0.05)
+# write.csv(as.data.frame(te7_il13_te7_allelic), "te7_il13_vs_te7_allelic.csv")
+
+te7_il13_te7_allelic_snp <- te7_il13_te7_allelic %>% pull(snp) %>% unique()
+# write_lines(te7_il13_te7_allelic_snp, "te7_il13_vs_te7_allelic_snp.txt", na = "NA", append = FALSE)
+```
+
+#### Only two variants are significant. Here is the information for them
+* rs73131258
+  + https://eqtl.onderzoek.io/index.php?page=gene_cis_details&gene=RNF114
+  + https://www.ncbi.nlm.nih.gov/pubmed/28165122
+* rs6875763
+  + http://eqtl.rc.fas.harvard.edu/eqtlbrowser/mrcau133list/42267
+  + http://europepmc.org/abstract/MED/23345460
+
+### significant allielic variant neg set: padj > 0.05
+```{r}
+te7_il13_te7_allelic_snp_neg <- te7_il13_te7_allelic_p %>% filter(pFDR > 0.05) %>% pull(snp) %>% unique()
+# write_lines(te7_il13_te7_allelic_snp_neg, "te7_il13_vs_te7_allelic_neg.txt", na = "NA", append = FALSE)
+```
+
+### Plot
+```{r}
+te7_il13_te7_plot <- inner_join(te7_il13_te7_allelic_all,te7_il13_te7_max_fold, by = "snp") %>% left_join(te7_il13_te7_allelic_p[,c("snp","p_value", "pFDR")], by = "snp")
+
+te7_il13_te7_plot$pos <- ifelse(te7_il13_te7_plot$pFDR <=0.05, 1,0) 
+te7_il13_te7_plot %>% replace_na(list(pos=0)) ->te7_il13_te7_plot
+
+allelic_enhancer_dot_plot(te7_il13_te7_plot, log2 = "log2_aver", max_fold = "max_fold", label = "pos", type = 0)
+```
+
+## Summary all the evidence for each variant
+```{r}
+snp_annation <- as.data.frame(unique(cts_nr_r_ratio$snp), stringsAsFactors=FALSE)
+colnames(snp_annation) <- "SNP_ID"
+snp_annation$Enhancer_activity_without_stimulation <- ifelse(snp_annation$SNP_ID %in% te7_ctrl_snp, 1, 0)
+snp_annation$Enhancer_activity_with_stimulation <- ifelse(snp_annation$SNP_ID %in% te7_il13_snp, 1, 0)
+snp_annation$Allelic_activity_without_stimulation <- ifelse(snp_annation$SNP_ID %in% te7_allelic_snp, 1, 0)
+snp_annation$Allelic_activity_with_stimulation <- ifelse(snp_annation$SNP_ID %in% te7_il13_allelic_snp, 1, 0)
+snp_annation$Stimulation_affected_enhancer_activity  <- ifelse(snp_annation$SNP_ID %in% il13_enhancer_snp, 1, 0)
+snp_annation$Stimulation_affected_allelic_activity  <- ifelse(snp_annation$SNP_ID %in% te7_il13_te7_allelic_snp, 1, 0)
+
+head(snp_annation)
+# write.csv(snp_annation, "snp_annotation.csv")
+```
