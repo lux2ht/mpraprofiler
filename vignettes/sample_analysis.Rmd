@@ -22,11 +22,9 @@ knitr::opts_chunk$set(
 ## Package dependency
 For this analysis, you need the following packages.
 ```{r, message=FALSE}
+# Install mpraprofiler
+# devtools::install_github("WeirauchLab/mpraprofiler")
 # Install these packages if you don't have
-
-# install.packages("devtools")
-# install.packages("getPass")
-# devtools::install_git("https://tfwebdev.research.cchmc.org/gitlab/lux2ht/mpraprofiler.git", ,credentials = git2r::cred_user_pass("lux2ht", getPass::getPass()))
 
 library(mpraprofiler)
 library(readxl)
