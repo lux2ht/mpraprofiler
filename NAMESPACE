@@ -2,7 +2,7 @@
 
 export(allelic_compare)
 export(allelic_compare_p)
-export(allelic_enhancer_dot_plot_1.25)
+export(allelic_enhancer_dot_plot)
 export(fold_enhancer_plot)
 export(max_fold)
 export(nr_r_ratio)

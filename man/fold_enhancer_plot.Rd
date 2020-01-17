@@ -17,11 +17,11 @@ fold_enhancer_plot(object, ...)
   foldchange = 0.5,
   yadjust = 100,
   ladjust = 0.25,
-  radjust = 1,
+  radjust = 0.25,
   xmin,
   xmax,
   ymax,
-  main = deparse(substitute(object))
+  main = NULL
 )
 }
 \arguments{

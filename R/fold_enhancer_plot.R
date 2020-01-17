@@ -1,4 +1,4 @@
-fold_enhancer_plot.DESeqResults <- function(object, alpha = 0.05, bw = 0.01, breaks = waiver(), foldchange =0.5, yadjust=100, ladjust=0.25, radjust=1, xmin, xmax, ymax, main = deparse(substitute(object))) {
+fold_enhancer_plot.DESeqResults <- function(object, alpha = 0.05, bw = 0.01, breaks = waiver(), foldchange =0.5, yadjust=100, ladjust=0.25, radjust=0.25, xmin, xmax, ymax, main = NULL) {
   if (is.null(object$log2FoldChange)) {
     stop("log2FoldChange column is not present: you should first run results()")
   }
@@ -26,7 +26,7 @@ fold_enhancer_plot.DESeqResults <- function(object, alpha = 0.05, bw = 0.01, bre
     geom_histogram(data = subset(df, padj<=0.05 & FoldChange >= 1+ foldchange), mapping = aes(x=FoldChange, fill = "#2b8cbe"), alpha = 0.5, color = "#2b8cbe", binwidth =bw) +
     geom_histogram(data = subset(df, padj<=0.05 & (FoldChange < 1+ foldchange & FoldChange>=1)), mapping = aes(x=FoldChange, fill = "#a6bddb"), alpha = 0.5, color = "#a6bddb", binwidth =bw) +
     theme_classic() + scale_fill_identity("", guide = 'legend',labels = c(paste0(expression(p[FDR]<0.05)," & ", "enVars" ), paste0(expression(p[FDR]<0.05)," & ", "Non-enVars" ), "All Variants")) + xlab("Fold Change") + ylab("Count") +
-    geom_vline(xintercept = 1+ foldchange, alpha = 0.4, color = "gold", size = 1)+ geom_text(aes(x=2+foldchange+radjust, label=paste(foldchange*100, "%\nchange"), y=yadjust), colour="black", size=4.5) +
+    geom_vline(xintercept = 1+ foldchange, alpha = 0.4, color = "gold", size = 1)+ geom_text(aes(x=1+foldchange+radjust, label=paste(foldchange*100, "%\nchange"), y=yadjust), colour="black", size=4.5) +
     theme(axis.text=element_text(size=10),axis.title = element_text(size=10), plot.title = element_text(hjust = 0.5, size = 10), legend.text=element_text(size=10), legend.position = c(0.75,0.3)) +
     annotation_logticks(base = 2, sides = "b") + annotation_logticks(base = 2, sides = "l") +
     scale_x_continuous(trans = "log2", limits = c(xmin,xmax), breaks = breaks) +
