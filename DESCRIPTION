@@ -18,3 +18,5 @@ Imports:
     tibble,
     tidyr,
     base
+VignetteBuilder: 
+    knitr
