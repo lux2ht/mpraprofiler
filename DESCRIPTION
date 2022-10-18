@@ -1,22 +1,31 @@
 Package: mpraprofiler
 Type: Package
-Title: Stastical analysis and visualization for massively parallel reporter assays, especially for allelic differential expression
+Title: Statistical Analysis and Visualization for MPRA Data
 Version: 0.1.0
-Author: Xiaoming Lu
-Maintainer: Xiaoming Lu <xiaoming-lu@hotmail.com>
-Description: This package include methods for analyzing and visualizing massively parallel reporter assays  data.
+Authors@R: c(
+    person("Lu", "Xiaoming", email="xiaoming-lu@hotmail.com", role = c("aut", "cre")),
+    person("Chen", "Xiaoting", email="xiaoting.chen@cchmc.org", role = c("aut")),
+    person("Ernst", "Kevin", email="kevin.ernst@cchmc.org", role = c("ctb")))
+Description: Methods for analyzing and visualizing data from massively parallel
+    reporter assays (MPRAs), especially for allelic differential expression.
+URL: https://github.com/WeirauchLab/mpraprofiler
+BugReports: https://github.com/WeirauchLab/mpraprofiler/issues
 License: GPL-3
 Encoding: UTF-8
 LazyData: true
-RoxygenNote: 7.0.2
+RoxygenNote: 7.2.1
 Imports: 
-    DESeq2,
     ggplot2,
     methods,
     stats,
-    dplyr,
     tibble,
+    dplyr,
     tidyr,
     base
+Suggests:
+    tidyverse,
+    readxl,
+    DESeq2,
+    knitr
 VignetteBuilder: 
     knitr

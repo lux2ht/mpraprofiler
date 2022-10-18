@@ -33,6 +33,3 @@ allelic_enhancer_dot_plot(
 \description{
 Dot plot for significant allelic different variant
 }
-\examples{
-allelic_enhancer_dot_plot(te7_ctrl_plot,"log2_aver", "max_fold", "pos")
-}

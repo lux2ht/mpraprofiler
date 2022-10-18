@@ -2,11 +2,10 @@
 title: "Massively Parallel Reporter Assay Analysis"
 author: "Xiaoming Lu"
 date: "`r Sys.Date()`"
-output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Vignette Title}
-  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteIndexEntry{Massively Parallel Reporter Assay Analysis}
   %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
 ---
 
 ```{r setup, include = FALSE}
@@ -15,27 +14,48 @@ knitr::opts_chunk$set(
   comment = "#>",
   fig.width = 6,
   fig.height = 3,
-  fig.align = "center"
+  fig.align = "center",
+  tidy.opts=list(width.cutoff=80),
+  tidy = TRUE
 )
 ```
 
-## Package dependency
-For this analysis, you need the following packages.
-```{r, message=FALSE}
-# Install mpraprofiler
-# devtools::install_github("WeirauchLab/mpraprofiler")
-# Install other packages if you don't have
+## Setup
+Install these packages if you don't already have them:
+
+```{r, eval=FALSE}
+install.packages("tidyverse")
+install.packages("readxl")
+
+# You'll need Bioconductor to get DESeq2
+install.packages("BiocManager")
+BiocManager::install('DESeq2')
+
+# Install mpraprofiler itself
+devtools::install_github("WeirauchLab/mpraprofiler")
+```
+
+Then, load these libraries:
+
+```{r, include=FALSE}
+suppressMessages(library(tidyverse))
+suppressMessages(library(readxl))
+suppressMessages(library(DESeq2))
 library(mpraprofiler)
-library(readxl)
+```
+
+```{r, eval=FALSE}
 library(tidyverse)
+library(readxl)
 library(DESeq2)
+library(mpraprofiler)
 ```
 
 ## Data Preparation for DESeq2
 All the sample data are in the data folder, which is the SLE MPRA dataset
 ```{r, message=FALSE, warning=FALSE}
 # Read all the data
-# Here use data from package.You can replace with your own data.
+# Here we use data from the package. You can replace with your own data.
 ext_data <- system.file("extdata", package = "mpraprofiler")
 file_list <- list.files(ext_data, pattern = "*.xlsx")
 file_loc <- paste(ext_data, file_list, sep = "/")
@@ -50,12 +70,12 @@ cts <- filter_counts[, 6:ncol(filter_counts)]
 row.names(cts) <- filter_counts$Oligo_ID
 cts <- as.matrix(cts)
 
-# This is how the required format for DESeq2 looks like
+# This is wgat the required format for DESeq2 looks like
 head(cts)
 ```
 
 ## DESeq2 analysis
-** You may refer to `DESeq2` package for more details **
+**You may refer to `DESeq2` package for more details**
 
 Create the design matrix for DESeq2.
 ```{r, message=FALSE}
@@ -76,7 +96,7 @@ dds <- DESeqDataSetFromMatrix(
 
 dds <- DESeq(dds)
 
-# sle vs contrl result
+# sle vs ctrl result
 dds_result <- results(dds, contrast=c("condition","sle","ctrl"))
 
 # plot
@@ -88,7 +108,7 @@ fold_enhancer_plot(dds_result, xmin = 0.5)
 ```{r, message=FALSE}
 dds_result_all <- as.data.frame(dds_result)
 
-#only care sle variant
+# only care about the SLE variant
 anno <- read_xlsx(file_loc[1])
 sle_variant <- anno %>% filter(SLE_Variant==1) %>% pull(Variant) %>% unique()
 dds_result_sle <- dds_result_all %>% rownames_to_column("Oligo_ID") %>% left_join(raw_counts[,1:4], by = "Oligo_ID") %>% filter(Variant %in% sle_variant)
@@ -106,8 +126,11 @@ length(dds_enVar)
 ## Allelic Analysis
 ### Prepare the data: add 0.5 to avoid infinite problem
 ```{r}
-cts <- cts + 0.5 # just use the dataset prepared for DESeq2
-cts_nr_r_ratio <- nr_r_ratio(cts) # this step calculate the non-ref vs ref ratio for all the variants and sample
+# just use the dataset prepared for DESeq2
+cts <- cts + 0.5
+
+# this step calculates the non-ref vs ref ratio for all the variants and sample
+cts_nr_r_ratio <- nr_r_ratio(cts)
 head(cts_nr_r_ratio)
 ```
 
@@ -124,14 +147,15 @@ max_fold <- max_fold(dds_result_all)
 
 ### get the p-value for the significant enhancer
 ```{r}
-allelic_p <- allelic_compare_p(allelic_all, dds_enVar) # the allelic log2 normalization data (allelic_compare) and the list of enhancer variant.
+# the allelic log2 normalization data (allelic_compare) and the list of enhancer variant.
+allelic_p <- allelic_compare_p(allelic_all, dds_enVar)
 ```
 
 ### get the significant allielic variant : Over than 25% change in either direction and padj < 0.05
 ```{r}
 allelic_data <- allelic_p %>% filter(pFDR < 0.05 & (log2_aver >= log2(1.25) | log2_aver <= -log2(1.25)))
 
-#allelic enVar
+# allelic enVar
 
 allelic_enVar <- allelic_data %>%  pull(snp) %>%  unique()
 ```
@@ -139,8 +163,9 @@ allelic_enVar <- allelic_data %>%  pull(snp) %>%  unique()
 
 ### Plot
 ```{r, message=FALSE, fig.fullwidth=TRUE}
-#only sle
+# only sle
 plot_data <- inner_join(allelic_all,max_fold, by = "snp") %>% left_join(allelic_p[,c("snp","p_value", "pFDR")], by = "snp") %>% filter(snp %in% sle_variant) %>% mutate(pos = if_else(snp %in% allelic_enVar & (log2_aver >= log2(1.25) | log2_aver <= -log2(1.25)), 2, if_else(snp %in% allelic_enVar & (log2_aver < log2(1.25) & log2_aver > -log2(1.25)), 1,0)))
 
-allelic_enhancer_dot_plot(plot_data, log2 = "log2_aver", max_fold = "max_fold", label = "pos") # with indicator line
+# with indicator line
+allelic_enhancer_dot_plot(plot_data, log2 = "log2_aver", max_fold = "max_fold", label = "pos")
 ```

@@ -3,3 +3,5 @@
 ^Build_process\.R$
 ^LICENSE\.md$
 ^README\.Rmd$
+^doc$
+^Meta$

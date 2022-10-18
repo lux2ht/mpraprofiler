@@ -12,8 +12,6 @@
 #' @importFrom ggplot2  ggplot geom_point scale_color_manual scale_alpha_manual theme_classic scale_x_continuous scale_y_continuous geom_vline geom_hline geom_text xlab ylab theme ggtitle  guide_legend element_blank
 #'
 #' @export
-#' @examples
-#' allelic_enhancer_dot_plot(te7_ctrl_plot,"log2_aver", "max_fold", "pos")
 
 allelic_enhancer_dot_plot <- function(data, log2, max_fold, label, foldchange = 0.25, type = 1, main = NULL) {
   nr_r_ratio <- max_fold_change <- pos <- NULL
