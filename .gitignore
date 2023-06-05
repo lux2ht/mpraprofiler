@@ -3,5 +3,6 @@
 .RData
 .Ruserdata
 Build_process.R
+README.html
 /doc/
 /Meta/

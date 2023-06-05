@@ -44,6 +44,21 @@ Please refer to
 [`vignettes/sample_analysis.md`](vignettes/sample_analysis.md) for
 details.
 
+## How to cite
+
+Xiaoming Lu, mpraprofiler, (2020), GitHub repository,
+<https://github.com/WeirauchLab/mpraprofiler>
+
+## Contributors
+
+| Name            | Institution                    | Remarks                                 |
+|-----------------|--------------------------------|-----------------------------------------|
+| Dr. Xiaoming Lu | Cincinnati Children’s Hospital | primary author                          |
+| Kevin Ernst     | Cincinnati Children’s Hospital | minor documentation and packaging fixes |
+
 ## License
 
-GNU General Public License v3. See [`LICENSE.md`](LICENSE.md)
+Copyleft Cincinnati Children’s Hospital Medical Center and contributors.
+
+Released under the terms of the GNU General Public License v3. See
+[`LICENSE.md`](LICENSE.md) for details.
