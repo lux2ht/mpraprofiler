@@ -10,6 +10,8 @@ The goal of mpraprofiler is to create a simple tool to perform allelic
 differential expression analysis for massively parallel reporter assay
 (MPRA) data.
 
+This is still a developing version. No class has been defined.
+
 ## Installation
 
 You can install mpraprofiler from
